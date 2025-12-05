@@ -1,0 +1,81 @@
+# End-to-End Flow (Happy Path)
+# docs/sequence_flow.mmd
+
+USER / MERCHANT
+    │
+    │ 1. Open QR UI (payment.html)
+    ▼
+FRONTEND (QR UI)
+    │
+    │ 2. POST /payments/create
+    │    - amount_lamports
+    │    - order_id (optional)
+    │    - customer_email (optional)
+    ▼
+API SERVER (Axum)
+    │
+    │ 3. Generate memo: PAY_<random>
+    │ 4. Insert row into `payments` table:
+    │      - id (UUID)
+    │      - amount_lamports
+    │      - memo
+    │      - status = "pending"
+    │      - receiver_address = MERCHANT_ADDRESS
+    │      - created_at, expires_at (5 min)
+    │ 5. Return JSON:
+    │      { payment_id, memo, amount_lamports, receiver_address,
+    │        status, solana_pay_url }
+    ▼
+FRONTEND (QR UI)
+    │
+    │ 6. Generate Solana Pay URL:
+    │      solana:<receiver>?amount=<amount>&memo=<memo>&label=<order>
+    │ 7. Render QR code
+    ▼
+CUSTOMER WALLET (PHANTOM / SOLFLARE)
+    │
+    │ 8. User scans QR
+    │ 9. Wallet builds tx:
+    │      - transfer SOL → receiver_address
+    │      - attach MEMO instruction = memo
+    │10. User approves transaction
+    ▼
+SOLANA CHAIN / RPC
+    │
+    │11. Transaction is confirmed on devnet
+    ▼
+INDEXER SERVICE
+    │
+    │12. Periodically:
+    │      a) getSignaturesForAddress(merchant)
+    │      b) for each new signature:
+    │           - getTransaction(signature)
+    │           - extract MEMO from logs
+    │           - extract transfer amount → lamports
+    │13. Look up DB: payments.memo == extracted memo AND status="pending"
+    │14. If match found:
+    │      - update row:
+    │          status     = "confirmed"
+    │          sender     = from_address
+    │          tx_sig     = signature
+    │          paid_at    = NOW()
+    │      - optionally push a job into Redis
+    ▼
+WORKER SERVICE (REDIS CONSUMER)
+    │
+    │15. Dequeue payment job
+    │16. Run any extra processing:
+    │      - send webhook / notification
+    │      - update analytics
+    │17. Mark job as completed
+    ▼
+FRONTEND / MERCHANT PANEL
+    │
+    │18. Poll /payments/:id
+    │19. Show status:
+    │      "pending" → "confirmed" or "expired"
+    ▼
+USER SEES
+    - ✅ Payment confirmed
+    - or 🕒 Waiting… / ❌ expired (if no tx within 5 min)
+

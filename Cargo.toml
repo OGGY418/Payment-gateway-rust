@@ -1,0 +1,72 @@
+[package]
+name = "payment-gateway-rust"
+version = "0.1.0"
+edition = "2024"
+authors = ["OGGY418"] #CHANGE 
+description = "Memo-based payment infrastructure for Solana with Redis queue system"
+default-run = "payment-gateway-rust"
+
+[dependencies]
+# Web Framework - For API endpoints
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "fs"] }
+
+# Database - PostgreSQL (UPDATED to 0.8)
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono"] }
+
+# Serialization - For JSON APIs
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Configuration - Load .env
+dotenv = "0.15"
+
+# UUID - For generating IDs
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error Handling
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Redis - Queue system
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
+
+# Solana blockchain (UPDATED to 2.0 for compatibility)
+solana-sdk = "2.0"
+solana-client = "2.0"
+solana-transaction-status = "2.0"
+spl-token = "6.0"
+spl-memo = "5.0"
+bs58 = "0.5"
+
+# Library definition
+[lib]
+path = "src/lib.rs"
+
+# Binary executables
+[[bin]]
+name = "payment-gateway-rust"
+path = "src/main.rs"
+
+[[bin]]
+name = "worker"
+path = "src/bin/worker.rs"
+
+[[bin]]
+name = "setup-wallet"
+path = "src/bin/setup_wallet.rs"
+
+[[bin]]
+name = "indexer"
+path = "src/bin/indexer.rs"
+
+[profile.release]
+opt-level = 3

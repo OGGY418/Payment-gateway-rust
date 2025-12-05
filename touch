@@ -1,0 +1,4 @@
+// Export modules for use in binaries (main + worker)
+pub mod config;
+pub mod database;
+pub mod services;

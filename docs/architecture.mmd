@@ -1,0 +1,55 @@
+# Payment Gateway Architecture Diagram
+# docs/architecture.mmd
+
+
+
+┌──────────────────────────────────────────────────────────────┐
+│           SOLANA MEMO PAYMENT GATEWAY — SYSTEM LAYERS         │
+└──────────────────────────────────────────────────────────────┘
+
+                     ┌──────────────────────────────┐
+                     │            CLIENT UI          │
+                     │   QR Pay  /  Phantom Test     │
+                     └──────────────────────────────┘
+                                  │
+                                  ▼
+                 (POST /payments/create — API Request)
+
+┌──────────────────────────────────────────────────────────────┐
+│                        APPLICATION LAYER                      │
+├──────────────────────────────────────────────────────────────┤
+│ ┌───────────────┐   ┌───────────────┐   ┌──────────────────┐ │
+│ │  API Server   │   │   Indexer     │   │   Worker Service  │ │
+│ │   (Axum)      │   │  (Poll RPC)   │   │ (Verify Payments) │ │
+│ └───────────────┘   └───────────────┘   └──────────────────┘ │
+│       │                       │                     │         │
+│       │  insert request       │                     │         │
+│       ▼                       │                     │         │
+│  ┌───────────────┐            │                     │         │
+│  │ PostgreSQL    │◄───────────┘          update     │         │
+│  │ Payment Store │◄─────────────────────────────────┘         │
+│  └───────────────┘                                            │
+│       ▲                                                       │
+│       │                                                       │
+│  enqueue payment job                   dequeue + process      │
+│       │                                                       │
+│  ┌───────────────┐                                            │
+│  │   Redis       │                                            │
+│  │  Queue(s)     │                                            │
+│  └───────────────┘                                            │
+└──────────────────────────────────────────────────────────────┘
+
+                     ┌──────────────────────────────┐
+                     │          SOLANA RPC           │
+                     │  (Blockchain Transactions)    │
+                     └──────────────────────────────┘
+                                  ▲
+                                  │
+   Phantom / Solflare wallets send transactions with MEMO + amount
+                                  │
+
+                     ┌──────────────────────────────┐
+                     │       CUSTOMER WALLET         │
+                     │     Phantom / Solflare        │
+                     └──────────────────────────────┘
+

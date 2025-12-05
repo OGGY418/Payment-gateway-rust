@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana Payment Gateway - Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            margin-top: 10px;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: translateY(-2px); }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: 600;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        .payment-details {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        .payment-details div {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        .payment-details strong { color: #667eea; }
+        .hidden { display: none; }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🦀 Payment Gateway - Phantom Test</h1>
+
+        <!-- Step 1: Connect Wallet -->
+        <div class="section">
+            <h2>Step 1: Connect Phantom Wallet</h2>
+            <button id="connectBtn" onclick="connectWallet()">
+                Connect Phantom Wallet
+            </button>
+            <div id="walletStatus" class="status hidden"></div>
+        </div>
+
+        <!-- Step 2: Create Payment -->
+        <div class="section">
+            <h2>Step 2: Create Payment Request</h2>
+            <label>Amount (SOL):</label>
+            <input type="number" id="amountInput" value="0.01" step="0.001" min="0.001">
+            <label>Order ID (optional):</label>
+            <input type="text" id="orderIdInput" placeholder="order_123">
+            <button id="createBtn" onclick="createPayment()" disabled>
+                Create Payment Request
+            </button>
+            <div id="paymentDetails" class="payment-details hidden"></div>
+        </div>
+
+        <!-- Step 3: Send Payment -->
+        <div class="section">
+            <h2>Step 3: Send Payment (Phantom Signs)</h2>
+            <button id="sendBtn" onclick="sendPayment()" disabled>
+                Build & Send Transaction via Phantom
+            </button>
+            <div id="txStatus" class="status hidden"></div>
+        </div>
+
+        <!-- Step 4: Check Status -->
+        <div class="section">
+            <h2>Step 4: Check Payment Status</h2>
+            <button id="statusBtn" onclick="checkStatus()" disabled>
+                Check Payment Status
+            </button>
+            <div id="statusResult" class="payment-details hidden"></div>
+        </div>
+    </div>
+
+    <!-- 1️⃣ Buffer polyfill (for any library that expects Node Buffer) -->
+    <script src="https://unpkg.com/buffer@6.0.3/index.js"></script>
+    <script>
+        // Ensure global Buffer exists and has .from
+        if (typeof window.Buffer === "undefined" || typeof window.Buffer.from !== "function") {
+            window.Buffer = buffer.Buffer;
+        }
+        console.log("Buffer polyfill ready:", typeof Buffer.from);
+    </script>
+
+    <!-- 2️⃣ Solana Web3.js bundle -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+
+    <!-- 3️⃣ App logic -->
+    <script>
+        // Destructure from global solanaWeb3
+        const { Connection, PublicKey, Transaction, SystemProgram, TransactionInstruction } = solanaWeb3;
+
+        // Global state
+        let walletAddress = null;
+        let paymentData = null;
+        const API_BASE = 'http://localhost:3000'; // adjust if backend uses another port
+        const SOLANA_NETWORK = 'devnet';
+
+        // Step 1: Connect to Phantom
+        async function connectWallet() {
+            try {
+                const { solana } = window;
+                
+                if (!solana || !solana.isPhantom) {
+                    alert('Phantom wallet not found! Please install Phantom.');
+                    return;
+                }
+
+                const response = await solana.connect();
+                walletAddress = response.publicKey.toString();
+                
+                const walletStatus = document.getElementById('walletStatus');
+                walletStatus.className = 'status success';
+                walletStatus.textContent = 
+                    `✅ Connected: ${walletAddress.slice(0, 8)}...${walletAddress.slice(-8)}`;
+                walletStatus.classList.remove('hidden');
+
+                const connectBtn = document.getElementById('connectBtn');
+                connectBtn.textContent = '✅ Wallet Connected';
+                connectBtn.disabled = true;
+
+                document.getElementById('createBtn').disabled = false;
+
+                console.log('Connected to wallet:', walletAddress);
+            } catch (error) {
+                console.error('Connection failed:', error);
+                const walletStatus = document.getElementById('walletStatus');
+                walletStatus.className = 'status error';
+                walletStatus.textContent = '❌ Connection failed: ' + error.message;
+                walletStatus.classList.remove('hidden');
+            }
+        }
+
+        // Step 2: Create Payment Request
+        async function createPayment() {
+            try {
+                const amountSol = parseFloat(document.getElementById('amountInput').value);
+                const orderId = document.getElementById('orderIdInput').value || 'test_order';
+                const amountLamports = Math.floor(amountSol * 1_000_000_000);
+
+                const paymentDetails = document.getElementById('paymentDetails');
+                paymentDetails.innerHTML = 'Creating payment request...';
+                paymentDetails.classList.remove('hidden');
+
+                const response = await fetch(`${API_BASE}/payments/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        amount_lamports: amountLamports,
+                        order_id: orderId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to create payment');
+                }
+
+                paymentData = await response.json();
+                
+                paymentDetails.innerHTML = `
+                    <div><strong>Payment ID:</strong> <code>${paymentData.payment_id}</code></div>
+                    <div><strong>Amount:</strong> ${amountSol} SOL (${amountLamports} lamports)</div>
+                    <div><strong>Receiver:</strong> <code>${paymentData.receiver_address}</code></div>
+                    <div><strong>Memo:</strong> <code>${paymentData.memo}</code></div>
+                    <div><strong>Status:</strong> ${paymentData.status}</div>
+                    <div style="color: #28a745; margin-top: 10px;">✅ Payment request created! Now send the payment.</div>
+                `;
+
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('statusBtn').disabled = false;
+
+                console.log('Payment created:', paymentData);
+            } catch (error) {
+                console.error('Create payment failed:', error);
+                const paymentDetails = document.getElementById('paymentDetails');
+                paymentDetails.innerHTML = 
+                    `<div style="color: #dc3545;">❌ Error: ${error.message}</div>`;
+                paymentDetails.classList.remove('hidden');
+            }
+        }
+
+        // Step 3: Build Transaction and Send via Phantom
+        async function sendPayment() {
+            try {
+                if (!paymentData) {
+                    alert('Please create a payment request first!');
+                    return;
+                }
+
+                const txStatus = document.getElementById('txStatus');
+                txStatus.className = 'status info';
+                txStatus.textContent = '🔨 Building transaction...';
+                txStatus.classList.remove('hidden');
+
+                const { solana } = window;
+
+                // Connect to Solana devnet
+                const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+
+                // Parse addresses
+                const fromPubkey = new PublicKey(walletAddress);
+                const toPubkey = new PublicKey(paymentData.receiver_address);
+
+                // Create transfer instruction
+                const transferIx = SystemProgram.transfer({
+                    fromPubkey,
+                    toPubkey,
+                    lamports: paymentData.amount_lamports
+                });
+
+                // Create memo instruction using Buffer if available, else TextEncoder
+                let memoData;
+                if (typeof Buffer !== 'undefined' && typeof Buffer.from === 'function') {
+                    memoData = Buffer.from(paymentData.memo, 'utf-8');
+                } else {
+                    const encoder = new TextEncoder();
+                    memoData = encoder.encode(paymentData.memo);
+                }
+
+                const memoIx = new TransactionInstruction({
+                    keys: [],
+                    data: memoData,
+                    programId: new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr')
+                });
+
+                // Build transaction
+                const transaction = new Transaction().add(transferIx).add(memoIx);
+                transaction.feePayer = fromPubkey;
+                const { blockhash } = await connection.getLatestBlockhash();
+                transaction.recentBlockhash = blockhash;
+
+                txStatus.textContent = '🔐 Waiting for Phantom signature...';
+
+                // Phantom signs & sends transaction
+                const signed = await solana.signAndSendTransaction(transaction);
+
+                txStatus.className = 'status success';
+                txStatus.innerHTML = `
+                    ✅ Transaction sent!<br>
+                    <strong>Signature:</strong> <code>${signed.signature}</code><br>
+                    <a href="https://explorer.solana.com/tx/${signed.signature}?cluster=devnet" target="_blank">
+                        View on Solana Explorer
+                    </a><br>
+                    <div style="margin-top: 10px;">👀 Indexer should detect this in 5-10 seconds!</div>
+                `;
+
+                console.log('Transaction sent:', signed.signature);
+
+                // Auto-check status after 8 seconds
+                setTimeout(() => checkStatus(), 8000);
+
+            } catch (error) {
+                console.error('Transaction failed:', error);
+                const txStatus = document.getElementById('txStatus');
+                txStatus.className = 'status error';
+                txStatus.textContent = '❌ Transaction failed: ' + error.message;
+                txStatus.classList.remove('hidden');
+            }
+        }
+
+        // Step 4: Check Payment Status
+        async function checkStatus() {
+            try {
+                if (!paymentData) {
+                    alert('No payment to check!');
+                    return;
+                }
+
+                const statusResult = document.getElementById('statusResult');
+                statusResult.innerHTML = 'Checking status...';
+                statusResult.classList.remove('hidden');
+
+                const response = await fetch(`${API_BASE}/payments/${paymentData.payment_id}`);
+                const status = await response.json();
+
+                const isConfirmed = status.status === 'confirmed';
+                const statusColor = isConfirmed ? '#28a745' : '#ffc107';
+                const statusIcon = isConfirmed ? '✅' : '⏳';
+
+                statusResult.innerHTML = `
+                    <div><strong>Payment ID:</strong> <code>${status.id}</code></div>
+                    <div><strong>Status:</strong> <span style="color: ${statusColor};">${statusIcon} ${status.status.toUpperCase()}</span></div>
+                    <div><strong>Amount:</strong> ${status.amount_lamports / 1_000_000_000} SOL</div>
+                    <div><strong>Memo:</strong> <code>${status.memo}</code></div>
+                    ${status.sender_address ? `<div><strong>Sender:</strong> <code>${status.sender_address}</code></div>` : ''}
+                    ${status.tx_sig ? `<div><strong>TX Signature:</strong> <code>${status.tx_sig.slice(0, 16)}...</code></div>` : ''}
+                    ${status.paid_at ? `<div><strong>Paid At:</strong> ${new Date(status.paid_at).toLocaleString()}</div>` : ''}
+                `;
+
+                console.log('Payment status:', status);
+            } catch (error) {
+                console.error('Status check failed:', error);
+                const statusResult = document.getElementById('statusResult');
+                statusResult.innerHTML = 
+                    `<div style="color: #dc3545;">❌ Error: ${error.message}</div>`;
+                statusResult.classList.remove('hidden');
+            }
+        }
+
+        // Auto-connect on page load if Phantom is already connected
+        window.addEventListener('load', async () => {
+            const { solana } = window;
+            if (solana && solana.isPhantom && solana.isConnected) {
+                await connectWallet();
+            }
+        });
+    </script>
+</body>
+</html>
+

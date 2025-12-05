@@ -1,0 +1,23 @@
+# Rust
+target/
+Cargo.lock
+
+
+wallet.json
+.env
+
+*.log
+logs/
+
+
+.pids
+
+*.db
+*.sqlite
+
+
+.DS_Store
+Thumbs.db
+
+
+postgres_data/

@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana Payment Gateway</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            color: #666;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .qr-container {
+            text-align: center;
+            padding: 30px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+
+        .qr-container canvas {
+            max-width: 300px;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .payment-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+
+        .payment-info-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .payment-info-item:last-child {
+            border-bottom: none;
+        }
+
+        .payment-info-label {
+            color: #666;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .payment-info-value {
+            color: #333;
+            font-size: 14px;
+            font-family: monospace;
+            background: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            max-width: 60%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-confirmed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .payments-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .payments-table th {
+            background: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+            color: #666;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .payments-table td {
+            padding: 16px 12px;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 14px;
+        }
+
+        .payments-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .copy-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 8px;
+        }
+
+        .copy-btn:hover {
+            background: #5568d3;
+        }
+
+        .alert {
+            padding: 16px;
+            border-radius: 12px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .hidden { display: none; }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .instructions {
+            background: #e7f3ff;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .instructions h3 {
+            color: #667eea;
+            margin-bottom: 12px;
+            font-size: 18px;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+            color: #333;
+        }
+
+        .instructions li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🦀 Payment Gateway</h1>
+            <p>Accept Solana payments with QR codes - No signup required</p>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="grid">
+            <!-- Left: Create Payment -->
+            <div class="card">
+                <h2>💰 Create Payment Request</h2>
+
+                <div class="input-group">
+                    <label>Amount (SOL)</label>
+                    <input type="number" id="amountInput" value="0.01" step="0.001" min="0.001" placeholder="0.01">
+                </div>
+
+                <div class="input-group">
+                    <label>Order ID (Optional)</label>
+                    <input type="text" id="orderIdInput" placeholder="order_12345">
+                </div>
+
+                <div class="input-group">
+                    <label>Customer Email (Optional)</label>
+                    <input type="email" id="emailInput" placeholder="customer@example.com">
+                </div>
+
+                <button onclick="createPayment()">Generate Payment QR Code</button>
+
+                <div id="creatingLoader" class="hidden">
+                    <div class="loader"></div>
+                    <p style="text-align: center; color: #666;">Creating payment request...</p>
+                </div>
+            </div>
+
+            <!-- Right: QR Code Display -->
+            <div class="card">
+                <h2>📱 Scan to Pay</h2>
+
+                <div id="qrPlaceholder" class="instructions">
+                    <h3>How it works:</h3>
+                    <ol>
+                        <li>Enter payment amount and details</li>
+                        <li>Click "Generate Payment QR Code"</li>
+                        <li>Customer scans QR with Solana wallet (Phantom, Solflare)</li>
+                        <li>Payment automatically confirmed</li>
+                    </ol>
+                </div>
+
+                <div id="qrSection" class="hidden">
+                    <div class="qr-container">
+                        <div id="qrcode"></div>
+                        <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                            Scan with any Solana wallet
+                        </p>
+                    </div>
+
+                    <div class="payment-info" id="paymentInfo"></div>
+
+                    <div id="statusChecker" class="hidden">
+                        <button onclick="checkPaymentStatus()">🔄 Refresh Status</button>
+                        <div id="statusDisplay" style="margin-top: 15px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment List -->
+        <div class="card">
+            <h2>📋 Recent Payments</h2>
+            <button onclick="loadPayments()" style="margin-bottom: 20px;">Refresh List</button>
+            
+            <div id="paymentsLoader" class="hidden">
+                <div class="loader"></div>
+            </div>
+
+            <div id="paymentsContainer"></div>
+        </div>
+    </div>
+
+    <!-- QRCode.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        let currentPayment = null;
+        let statusCheckInterval = null;
+        let countdownInterval = null; // for 5-minute expiry timer
+
+        // Create Payment Request
+        async function createPayment() {
+            try {
+                const amount = parseFloat(document.getElementById('amountInput').value);
+                const orderId = document.getElementById('orderIdInput').value || `order_${Date.now()}`;
+                const email = document.getElementById('emailInput').value;
+
+                if (amount <= 0) {
+                    alert('Please enter a valid amount');
+                    return;
+                }
+
+                // Show loader
+                document.getElementById('creatingLoader').classList.remove('hidden');
+                document.getElementById('qrPlaceholder').classList.add('hidden');
+                document.getElementById('qrSection').classList.add('hidden');
+
+                // Create payment via backend
+                const response = await fetch(`${API_BASE}/payments/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        amount_lamports: Math.floor(amount * 1_000_000_000),
+                        order_id: orderId,
+                        customer_email: email || null
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to create payment');
+
+                currentPayment = await response.json();
+
+                // Hide loader
+                document.getElementById('creatingLoader').classList.add('hidden');
+
+                // Build Solana Pay URL manually (frontend)
+                const amountParam = amount.toFixed(9); // nice fixed precision
+                const solanaPayUrl =
+                    `solana:${currentPayment.receiver_address}?amount=${amountParam}` +
+                    `&memo=${encodeURIComponent(currentPayment.memo)}` +
+                    `&label=${encodeURIComponent(orderId)}`;
+
+                // Generate QR Code
+                document.getElementById('qrcode').innerHTML = '';
+                new QRCode(document.getElementById('qrcode'), {
+                    text: solanaPayUrl,
+                    width: 300,
+                    height: 300,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+
+                // Display payment info
+                document.getElementById('paymentInfo').innerHTML = `
+                    <div class="payment-info-item">
+                        <span class="payment-info-label">Payment ID</span>
+                        <span class="payment-info-value" title="${currentPayment.payment_id}">
+                            ${currentPayment.payment_id.slice(0, 8)}...
+                            <button class="copy-btn" onclick="copyToClipboard('${currentPayment.payment_id}')">Copy</button>
+                        </span>
+                    </div>
+                    <div class="payment-info-item">
+                        <span class="payment-info-label">Amount</span>
+                        <span class="payment-info-value">${amount} SOL</span>
+                    </div>
+                    <div class="payment-info-item">
+                        <span class="payment-info-label">Memo</span>
+                        <span class="payment-info-value">
+                            ${currentPayment.memo}
+                            <button class="copy-btn" onclick="copyToClipboard('${currentPayment.memo}')">Copy</button>
+                        </span>
+                    </div>
+                    <div class="payment-info-item">
+                        <span class="payment-info-label">Status</span>
+                        <span class="status-badge status-${currentPayment.status}">${currentPayment.status}</span>
+                    </div>
+                `;
+
+                // Show QR section
+                document.getElementById('qrSection').classList.remove('hidden');
+                document.getElementById('statusChecker').classList.remove('hidden');
+
+                // Start auto-checking status + expiry countdown
+                startStatusPolling();
+                startExpiryCountdown();
+
+                // Refresh payment list
+                loadPayments();
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to create payment: ' + error.message);
+                document.getElementById('creatingLoader').classList.add('hidden');
+                document.getElementById('qrPlaceholder').classList.remove('hidden');
+            }
+        }
+
+        // Check Payment Status
+        async function checkPaymentStatus() {
+            if (!currentPayment) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/payments/${currentPayment.payment_id}`);
+                const status = await response.json();
+
+                const statusColor = status.status === 'confirmed' ? 'success' : 'info';
+                const statusIcon = status.status === 'confirmed' ? '✅' : '⏳';
+
+                document.getElementById('statusDisplay').innerHTML = `
+                    <div class="alert alert-${statusColor}">
+                        <strong>${statusIcon} Status: ${status.status.toUpperCase()}</strong><br>
+                        ${status.status === 'confirmed' ? 
+                            `<div style="margin-top: 10px;">
+                                <strong>Transaction:</strong> ${status.tx_sig ? status.tx_sig.slice(0, 16) + '...' : 'N/A'}<br>
+                                <strong>Paid at:</strong> ${status.paid_at ? new Date(status.paid_at).toLocaleString() : 'N/A'}
+                            </div>` : 
+                            'Waiting for payment...'
+                        }
+                    </div>
+                `;
+
+                if (status.status === 'confirmed') {
+                    stopStatusPolling();
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                        countdownInterval = null;
+                    }
+                    loadPayments(); // Refresh list
+                }
+
+                return status;
+            } catch (error) {
+                console.error('Status check error:', error);
+            }
+        }
+
+        // Auto-check status every 5 seconds
+        function startStatusPolling() {
+            stopStatusPolling(); // Clear any existing interval
+            statusCheckInterval = setInterval(checkPaymentStatus, 5000);
+            checkPaymentStatus(); // Check immediately
+        }
+
+        function stopStatusPolling() {
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+                statusCheckInterval = null;
+            }
+        }
+
+        // 5-minute expiry countdown (frontend-only)
+        function startExpiryCountdown() {
+            // Clear any existing countdown
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+
+            const createdAt = Date.now();
+            const expiresAt = createdAt + 5 * 60 * 1000; // 5 minutes
+
+            const statusDisplay = document.getElementById('statusDisplay');
+            document.getElementById('statusChecker').classList.remove('hidden');
+
+            function tick() {
+                // If currentPayment is gone (e.g., after confirm), stop
+                if (!currentPayment) {
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                        countdownInterval = null;
+                    }
+                    return;
+                }
+
+                const now = Date.now();
+                const remaining = expiresAt - now;
+
+                if (remaining <= 0) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+
+                    statusDisplay.innerHTML = `
+                        <div class="alert alert-info">
+                            ❌ Payment request expired. Please generate a new QR.
+                        </div>
+                    `;
+
+                    // Stop polling and hide QR
+                    stopStatusPolling();
+                    document.getElementById('qrSection').classList.add('hidden');
+                    document.getElementById('qrPlaceholder').classList.remove('hidden');
+
+                    currentPayment = null;
+                    return;
+                }
+
+                const minutes = Math.floor(remaining / 60000);
+                const seconds = Math.floor((remaining % 60000) / 1000);
+
+                statusDisplay.innerHTML = `
+                    <div class="alert alert-info">
+                        ⏳ Expires in <strong>${minutes}:${seconds.toString().padStart(2, '0')}</strong>
+                    </div>
+                `;
+            }
+
+            tick(); // run once immediately
+            countdownInterval = setInterval(tick, 1000); // update every second
+        }
+
+        // Load Payment List
+        async function loadPayments() {
+            try {
+                document.getElementById('paymentsLoader').classList.remove('hidden');
+                
+                const response = await fetch(`${API_BASE}/payments`);
+                const payments = await response.json();
+
+                document.getElementById('paymentsLoader').classList.add('hidden');
+
+                if (payments.length === 0) {
+                    document.getElementById('paymentsContainer').innerHTML = `
+                        <div class="alert alert-info">No payments yet. Create your first payment!</div>
+                    `;
+                    return;
+                }
+
+                const tableHTML = `
+                    <table class="payments-table">
+                        <thead>
+                            <tr>
+                                <th>Payment ID</th>
+                                <th>Amount</th>
+                                <th>Memo</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${payments.map(p => `
+                                <tr>
+                                    <td><code>${p.id.slice(0, 8)}...</code></td>
+                                    <td>${(p.amount_lamports / 1_000_000_000).toFixed(3)} SOL</td>
+                                    <td><code>${p.memo}</code></td>
+                                    <td><span class="status-badge status-${p.status}">${p.status}</span></td>
+                                    <td>${new Date(p.created_at).toLocaleString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+
+                document.getElementById('paymentsContainer').innerHTML = tableHTML;
+            } catch (error) {
+                console.error('Load payments error:', error);
+                document.getElementById('paymentsLoader').classList.add('hidden');
+            }
+        }
+
+        // Copy to clipboard
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Copied to clipboard!');
+            });
+        }
+
+        // Load payments on page load
+        window.addEventListener('load', () => {
+            loadPayments();
+        });
+
+        // Clean up intervals on page unload
+        window.addEventListener('beforeunload', () => {
+            stopStatusPolling();
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+        });
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,108 @@
+# Components & Responsibilities
+# docs/components.mmd
+
+────────────────────────────────────────────────────────────────
+CORE COMPONENTS
+────────────────────────────────────────────────────────────────
+
+1. API Server (Axum, Rust)
+   - Exposes REST endpoints:
+       - POST /payments/create
+       - GET  /payments
+       - GET  /payments/:id
+       - GET  /health (optional)
+       - GET  /stats  (optional)
+   - Validates input amount and order_id
+   - Generates unique memo: PAY_<random>
+   - Sets expiry (default 5 minutes from creation)
+   - Writes payment row into PostgreSQL
+   - Returns:
+       - payment_id
+       - memo
+       - amount_lamports
+       - receiver_address (merchant)
+       - status = "pending"
+       - solana_pay_url (for QR)
+
+2. PostgreSQL (Database)
+   Tables (conceptual):
+   - payments
+       id (UUID)
+       amount_lamports (BIGINT)
+       memo (TEXT, UNIQUE)
+       status ("pending" | "confirmed" | "expired" | "failed")
+       receiver_address (TEXT)
+       sender_address (TEXT, nullable)
+       tx_sig (TEXT, nullable)
+       created_at, updated_at, paid_at, expires_at (TIMESTAMPS)
+
+   - processed_signatures (optional)
+       signature (TEXT, PK)
+       processed_at (TIMESTAMP)
+
+3. Redis (Queue)
+   - Queue name example: "payment_jobs"
+   - Used to decouple on-chain detection from heavy post-processing:
+       - When indexer confirms payment → enqueue job
+       - Worker consumes job → sends webhooks, analytics, etc.
+   - Makes the API fast and resilient.
+
+4. Indexer Service (Rust)
+   - Reads SOLANA_RPC_URL + MERCHANT_ADDRESS from .env
+   - Loop:
+       - getSignaturesForAddress(merchant)
+       - filter new signatures (not in processed_signatures)
+       - getTransaction(signature)
+       - extract MEMO from logs
+       - extract lamport amount credited to merchant
+   - If memo matches a pending payment:
+       - Update DB row: status="confirmed", set sender, tx_sig, paid_at
+       - Insert into processed_signatures
+       - Push job into Redis: { payment_id, signature, amount }
+
+5. Worker Service (Rust)
+   - Listens to Redis queue
+   - For each job:
+       - Re-checks DB row (id, status)
+       - Runs any side effects:
+           - log to stdout
+           - send webhook (future)
+           - update stats
+       - Marks job as processed
+
+6. Frontend – Phantom Test Page
+   - Simple HTML + JS
+   - Button: "Connect Phantom"
+   - Calls POST /payments/create
+   - Builds Transaction in browser (SystemProgram.transfer + Memo)
+   - Uses `window.solana.signAndSendTransaction(...)`
+   - Shows Solana Explorer link + lets user test the flow end-to-end.
+
+7. Frontend – QR Payment Page
+   - HTML UI for merchants
+   - Form for:
+       - amount (SOL)
+       - order id (optional)
+       - customer email (optional)
+   - Calls POST /payments/create
+   - Uses returned fields to build Solana Pay–style URL:
+       solana:<receiver>?amount=<amount>&memo=<memo>&label=<order_id>
+   - Renders QR using qrcode.js
+   - Polls GET /payments/:id every few seconds
+   - Shows recent payments (GET /payments) in a table.
+
+8. Configuration & Scripts
+   - .env
+       DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
+       SOLANA_RPC_URL  (default: https://api.devnet.solana.com)
+       SOLANA_NETWORK  (devnet)
+       MERCHANT_ADDRESS (your devnet wallet)
+
+   - start.sh (or similar)
+       Script that:
+         - starts Redis
+         - runs DB migrations (if any)
+         - runs API server
+         - runs indexer & worker
+       So contributors can run the full stack with a single command.
+
